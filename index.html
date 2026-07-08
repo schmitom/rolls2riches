@@ -1,4 +1,191 @@
-// MODUS 1: LOKALER START
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rolls 2 Riches - Hybrid Edition (V12)</title>
+    <!-- PeerJS Bibliothek für den P2P-Modus -->
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a; --card-bg: #1e293b; --accent: #f59e0b;
+            --p1-color: #ef4444; --p2-color: #3b82f6; --p3-color: #10b981; --p4-color: #a855f7;
+            --player-columns: 4;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color); color: #f8fafc; margin: 0; padding: 20px;
+            display: flex; flex-direction: column; align-items: center; position: relative; overflow-x: hidden;
+        }
+        h1 { color: var(--accent); margin: 0 0 5px 0; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .status-header-text {
+            color: #94a3b8; font-size: 1.2em; margin-bottom: 20px; font-style: italic;
+            text-align: center; min-height: 50px; display: flex; align-items: center; justify-content: center; gap: 12px;
+        }
+        .dice-roll-display { display: inline-flex; gap: 8px; font-size: 2.2em; color: var(--accent); vertical-align: middle; line-height: 1; }
+        .dice-spinning { display: inline-block; animation: spin 0.15s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Fallende Würfel-Animation */
+        .falling-dice-anim {
+            position: fixed; font-size: 2.5em; z-index: 9999; pointer-events: none;
+            animation: dropAndFade 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+        }
+        @keyframes dropAndFade {
+            0% { transform: translateY(0) scale(1.2); opacity: 1; }
+            80% { opacity: 1; }
+            100% { transform: translateY(var(--drop-y)) translateX(var(--drop-x)) scale(0.7); opacity: 0; }
+        }
+
+        #setup-screen {
+            background-color: var(--card-bg); padding: 30px; border-radius: 12px; text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 420px; width: 100%; margin-top: 30px; border: 2px solid #334155;
+        }
+        .setup-select, .setup-input { background-color: #0f172a; color: #fff; border: 1px solid #475569; padding: 10px 20px; font-size: 1.1em; border-radius: 6px; margin: 10px 0; width: 100%; box-sizing: border-box; text-align: center; }
+        #game-container { display: none; width: 100%; max-width: 1000px; flex-direction: column; align-items: center; }
+        .player-bar { display: grid; grid-template-columns: repeat(var(--player-columns), 1fr); gap: 15px; width: 100%; margin-bottom: 25px; }
+        .player-status { background-color: var(--card-bg); padding: 12px; border-radius: 8px; text-align: center; border: 3px solid transparent; box-shadow: 0 4px 6px rgba(0,0,0,0.2); transition: all 0.3s ease; }
+        #p0-status.active { border-color: var(--p1-color); box-shadow: 0 0 15px rgba(239, 68, 68, 0.3); }
+        #p1-status.active { border-color: var(--p2-color); box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); }
+        #p2-status.active { border-color: var(--p3-color); box-shadow: 0 0 15px rgba(16, 185, 129, 0.3); }
+        #p3-status.active { border-color: var(--p4-color); box-shadow: 0 0 15px rgba(168, 85, 247, 0.3); }
+        .p1-txt { color: var(--p1-color); font-weight: bold; }
+        .p2-txt { color: var(--p2-color); font-weight: bold; }
+        .p3-txt { color: var(--p3-color); font-weight: bold; }
+        .p4-txt { color: var(--p4-color); font-weight: bold; }
+        .dice-pool-graphic { display: flex; justify-content: center; gap: 4px; margin: 8px 0; }
+        .dice-icon { width: 12px; height: 12px; background-color: #e2e8f0; border: 1px solid #94a3b8; border-radius: 2px; }
+        #p0-status .dice-icon.active { background-color: var(--p1-color); border-color: #b91c1c; }
+        #p1-status .dice-icon.active { background-color: var(--p2-color); border-color: #1d4ed8; }
+        #p2-status .dice-icon.active { background-color: var(--p3-color); border-color: #047857; }
+        #p3-status .dice-icon.active { background-color: var(--p4-color); border-color: #6b21a8; }
+        .dice-icon.spent { background-color: #334155; border-color: #1e293b; opacity: 0.4; }
+        .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; width: 100%; margin-bottom: 25px; }
+        @media (max-width: 768px) { .board { grid-template-columns: repeat(2, 1fr); } }
+        .dice-tile { background-color: var(--card-bg); border-radius: 12px; padding: 15px 15px 75px 15px; box-shadow: 0 6px 12px rgba(0,0,0,0.3); display: flex; flex-direction: column; align-items: center; border: 2px solid #334155; position: relative; min-height: 220px; }
+        .tile-number { width: 45px; height: 45px; background-color: #ffffff; color: #000000; font-size: 1.8em; font-weight: bold; display: flex; align-items: center; justify-content: center; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); margin-bottom: 12px; }
+        .cash-pool { background: #064e3b; border: 1px solid #10b981; padding: 8px; border-radius: 6px; width: 95%; text-align: center; margin-bottom: 12px; }
+        .cash-card-badge { background-color: #10b981; color: #000; font-weight: bold; padding: 2px 5px; border-radius: 4px; margin: 1px; display: inline-block; font-size: 0.8em; }
+        .pool-total { font-size: 1.1em; font-weight: bold; color: #34d399; margin-top: 4px; }
+        .placed-dice { width: 95%; display: flex; flex-direction: column; gap: 4px; font-size: 0.85em; margin-bottom: 10px; }
+        .player-dice-row { display: flex; justify-content: space-between; padding: 4px 8px; border-radius: 4px; background-color: rgba(15, 23, 42, 0.4); }
+        .place-action-zone { position: absolute; bottom: 15px; left: 5%; width: 90%; height: 45px; display: flex; align-items: center; justify-content: center; z-index: 10; }
+        .select-tile-btn { width: 100%; height: 100%; background-color: var(--accent); color: #000; border: none; font-weight: bold; font-size: 0.95em; border-radius: 6px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2); transition: background-color 0.15s ease; }
+        .select-tile-btn:hover { background-color: #fbbf24; }
+        .select-tile-btn.max-roll { background-color: #10b981; color: #000; }
+        .select-tile-btn.max-roll:hover { background-color: #34d399; }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 100; display: none; }
+        .modal-content { background-color: var(--card-bg); padding: 25px; border-radius: 15px; width: 90%; max-width: 850px; text-align: center; border: 2px solid var(--accent); box-shadow: 0 10px 30px rgba(0,0,0,0.7); }
+        .payout-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.95em; text-align: left; }
+        .payout-table th, .payout-table td { padding: 12px 14px; border-bottom: 1px solid #334155; vertical-align: middle; }
+        .payout-table th { color: var(--accent); font-weight: 600; background-color: rgba(15, 23, 42, 0.4); text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.5px; }
+        .badge-win { background-color: #064e3b; color: #34d399; padding: 4px 8px; border-radius: 4px; border: 1px solid #10b981; display: inline-block; margin: 2px; font-size: 0.9em; }
+        .clash-text-list { color: #f87171; font-weight: 500; }
+        .empty-dash { color: #475569; }
+        .main-btn { background-color: var(--accent); color: #000; border: none; padding: 12px 24px; font-size: 1.1em; font-weight: bold; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2); transition: background-color 0.15s; margin: 5px; }
+        .main-btn:hover { background-color: #fbbf24; }
+        .mode-headline { font-size: 0.9em; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; margin-top: 15px;}
+    </style>
+</head>
+<body>
+    <h1>Rolls 2 Riches</h1>
+    <div class="status-header-text" id="status-line">Wähle einen Spielmodus...</div>
+    
+    <div id="setup-screen">
+        <h3 style="margin-top: 0; color: var(--accent);">Spielmodus wählen</h3>
+        
+        <div id="lobby-options">
+            <div class="mode-headline">Offline Modus</div>
+            <select id="player-count" class="setup-select" style="margin-top:0;">
+                <option value="2">2 Spieler (Lokal)</option>
+                <option value="3">3 Spieler (Lokal)</option>
+                <option value="4" selected>4 Spieler (Lokal)</option>
+            </select>
+            <button class="main-btn" style="width: 100%; margin-bottom: 15px; background-color: #10b981;" onclick="startLocalGame()">Lokal spielen (Pass & Play)</button>
+            
+            <div class="mode-headline">Online Multiplayer (P2P)</div>
+            <button class="main-btn" style="width: 100%;" onclick="initAsHost()">Online: Spiel hosten</button>
+            <input type="text" id="join-id-input" class="setup-input" placeholder="Spiel-ID des Hosts eingeben">
+            <button class="main-btn" style="width: 100%; background-color: #3b82f6; color: white;" onclick="initAsClient()">Online: Spiel beitreten</button>
+        </div>
+        
+        <div id="lobby-wait" style="display: none; margin-top: 20px;">
+            <p>Deine Online Spiel-ID lautet:</p>
+            <h2 id="display-peer-id" style="color: var(--accent); letter-spacing: 2px; font-size: 2em; margin: 10px 0;">------</h2>
+            <p style="font-size: 0.9em; color: #94a3b8;">Gib diese ID deinem Mitspieler. Warte auf Beitritt...</p>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <div class="player-bar" id="dynamic-player-bar"></div>
+        <div class="board">
+            <script>
+                for (let i = 1; i <= 6; i++) {
+                    document.write(`
+                        <div class="dice-tile" id="tile-${i}">
+                            <div class="tile-header"><div class="tile-number">${i}</div></div>
+                            <div class="cash-pool"><div id="cards-${i}"></div><div class="pool-total" id="total-${i}">0 $</div></div>
+                            <div class="placed-dice" id="placed-${i}"></div>
+                            <div class="place-action-zone" id="action-zone-${i}"></div>
+                        </div>
+                    `);
+                }
+            </script>
+        </div>
+    </div>
+    <div class="modal" id="payout-modal"><div class="modal-content"></div></div>
+
+    <script>
+        const WIN_CONDITION = 1000000;
+        const cashValues = [10000, 10000, 20000, 20000, 20000, 30000, 30000, 30000, 40000, 40000, 40000, 50000, 50000, 50000, 60000, 70000, 80000, 90000, 100000];
+        
+        let totalPlayers = 4;
+        let isOnlineMode = false;
+        let isHost = false;
+        let myPlayerIndex = 0;
+        
+        let deck = [], playerBanks = [], playerDice = [], activePlayer = 0, roundStarter = 0, currentRound = 1;
+        let peer = null, conn = null;
+
+        let tiles = {
+            1: { cards: [], dice: [], history: new Set() }, 2: { cards: [], dice: [], history: new Set() },
+            3: { cards: [], dice: [], history: new Set() }, 4: { cards: [], dice: [], history: new Set() },
+            5: { cards: [], dice: [], history: new Set() }, 6: { cards: [], dice: [], history: new Set() }
+        };
+        
+        const playerClasses = ['p1-txt', 'p2-txt', 'p3-txt', 'p4-txt'];
+        const playerColors = ['var(--p1-color)', 'var(--p2-color)', 'var(--p3-color)', 'var(--p4-color)'];
+        const playerNames = ['Spieler 1', 'Spieler 2', 'Spieler 3', 'Spieler 4'];
+        const diceUnicode = { 1: '⚀', 2: '⚁', 3: '⚂', 4: '⚃', 5: '⚄', 6: '⚅' };
+
+        // PeerJS mit Google STUN-Servern für reibungslosen Netzwerkwechsel initialisieren
+        document.addEventListener("DOMContentLoaded", () => {
+            const shortId = Math.floor(1000 + Math.random() * 9000).toString();
+            peer = new Peer("r2r-" + shortId, {
+                config: {
+                    'iceServers': [
+                        { url: 'stun:stun.l.google.com:19302' },
+                        { url: 'stun:stun1.l.google.com:19302' },
+                        { url: 'stun:stun2.l.google.com:19302' },
+                        { url: 'stun:stun3.l.google.com:19302' },
+                        { url: 'stun:stun4.l.google.com:19302' }
+                    ]
+                }
+            });
+            peer.on('open', (id) => {
+                let idEl = document.getElementById('display-peer-id');
+                if(idEl) idEl.innerText = shortId;
+            });
+            peer.on('connection', (connection) => {
+                if (isOnlineMode && isHost) {
+                    conn = connection;
+                    setupConnectionListeners();
+                    startOnlineGame();
+                }
+            });
+        });
+
+        // MODUS 1: LOKALER START
         function startLocalGame() {
             isOnlineMode = false;
             totalPlayers = parseInt(document.getElementById('player-count').value);
@@ -55,7 +242,6 @@
         }
 
         function startOnlineGame() {
-            // Wird NUR auf dem Host ausgeführt, sobald der Client verbunden ist!
             document.getElementById('setup-screen').style.display = 'none';
             document.getElementById('game-container').style.display = 'flex';
             
@@ -63,16 +249,14 @@
             playerDice = [8, 8];
             buildPlayerBarUI();
             initDeck();
-            setupRoundCards(); // Generiert die Kacheln
+            setupRoundCards();
             
-            // Jetzt die frisch generierten Kacheln und das Deck an den Client senden
             sendDataToPeer({
                 type: 'START_GAME',
                 tiles: sanitizeTilesForNetwork(tiles),
                 deck: deck
             });
             
-            // Erst jetzt darf gewürfelt werden!
             executeRoll();
         }
 
@@ -305,7 +489,7 @@
             }
             
             let buttonHtml = (!isOnlineMode || isHost) ? `<button class="main-btn" onclick="startNewRound()">Nächste Runde starten</button>` : `<p style="color: #94a3b8;">Warte darauf, dass der Host die nächste Runde startet...</p>`;
-            let modalHtml = `<h2 style="color:var(--accent); margin-top:0; margin-bottom:5px;">Runden-Auszahlung</h2><div style="color:#94a3b8; font-size:0.95em; margin-bottom:10px;">Was ist in Runde ${currentRound} happened?</div><table class="payout-table"><thead><tr><th style="width:20%;">Spieler</th><th style="width:25%;">Konto (Alt ➔ Neu)</th><th style="width:35%;">Hier Gewonnen</th><th style="width:20%;">Hier Rausgeflogen</th></tr></thead><tbody>${tableRowsHtml}</tbody></table>${buttonHtml}`;
+            let modalHtml = `<h2 style="color:var(--accent); margin-top:0; margin-bottom:5px;">Runden-Auszahlung</h2><div style="color:#94a3b8; font-size:0.95em; margin-bottom:10px;">Was ist in Runde ${currentRound} passiert?</div><table class="payout-table"><thead><tr><th style="width:20%;">Spieler</th><th style="width:25%;">Konto (Alt ➔ Neu)</th><th style="width:35%;">Hier Gewonnen</th><th style="width:20%;">Hier Rausgeflogen</th></tr></thead><tbody>${tableRowsHtml}</tbody></table>${buttonHtml}`;
             
             document.getElementById('payout-modal').querySelector('.modal-content').innerHTML = modalHtml;
             document.getElementById('payout-modal').style.display = 'flex';
@@ -359,3 +543,6 @@
             for(let i=1; i<=6; i++) { tiles[i].cards = networkTiles[i].cards; tiles[i].dice = networkTiles[i].dice; tiles[i].history = new Set(networkTiles[i].history); }
             return tiles;
         }
+    </script>
+</body>
+</html>

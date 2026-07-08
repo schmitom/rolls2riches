@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rolls 2 Riches - Hybrid Edition</title>
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <title>Rolls 2 Riches</title>
     <style>
         :root {
             --bg-color: #0f172a; --card-bg: #1e293b; --accent: #f59e0b;
@@ -38,9 +37,9 @@
 
         #setup-screen {
             background-color: var(--card-bg); padding: 30px; border-radius: 12px; text-align: center;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 420px; width: 100%; margin-top: 30px; border: 2px solid #334155;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 400px; width: 100%; margin-top: 50px; border: 2px solid #334155;
         }
-        .setup-select, .setup-input { background-color: #0f172a; color: #fff; border: 1px solid #475569; padding: 10px 20px; font-size: 1.1em; border-radius: 6px; margin: 10px 0; width: 100%; box-sizing: border-box; text-align: center; }
+        .setup-select { background-color: #0f172a; color: #fff; border: 1px solid #475569; padding: 10px 20px; font-size: 1.1em; border-radius: 6px; margin: 20px 0; width: 100%; cursor: pointer; }
         #game-container { display: none; width: 100%; max-width: 1000px; flex-direction: column; align-items: center; }
         .player-bar { display: grid; grid-template-columns: repeat(var(--player-columns), 1fr); gap: 15px; width: 100%; margin-bottom: 25px; }
         .player-status { background-color: var(--card-bg); padding: 12px; border-radius: 8px; text-align: center; border: 3px solid transparent; box-shadow: 0 4px 6px rgba(0,0,0,0.2); transition: all 0.3s ease; }
@@ -81,40 +80,21 @@
         .badge-win { background-color: #064e3b; color: #34d399; padding: 4px 8px; border-radius: 4px; border: 1px solid #10b981; display: inline-block; margin: 2px; font-size: 0.9em; }
         .clash-text-list { color: #f87171; font-weight: 500; }
         .empty-dash { color: #475569; }
-        .main-btn { background-color: var(--accent); color: #000; border: none; padding: 12px 24px; font-size: 1.1em; font-weight: bold; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2); transition: background-color 0.15s; margin: 5px; }
+        .main-btn { background-color: var(--accent); color: #000; border: none; padding: 14px 45px; font-size: 1.2em; font-weight: bold; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2); transition: background-color 0.15s; }
         .main-btn:hover { background-color: #fbbf24; }
-        .mode-headline { font-size: 0.9em; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; margin-top: 15px;}
     </style>
 </head>
 <body>
     <h1>Rolls 2 Riches</h1>
-    <div class="status-header-text" id="status-line">Wähle einen Spielmodus...</div>
-    
+    <div class="status-header-text" id="status-line">Spieleranzahl wählen...</div>
     <div id="setup-screen">
-        <h3 style="margin-top: 0; color: var(--accent);">Spielmodus wählen</h3>
-        
-        <div id="lobby-options">
-            <div class="mode-headline">Offline Modus</div>
-            <select id="player-count" class="setup-select" style="margin-top:0;">
-                <option value="2">2 Spieler (Lokal)</option>
-                <option value="3">3 Spieler (Lokal)</option>
-                <option value="4" selected>4 Spieler (Lokal)</option>
-            </select>
-            <button class="main-btn" style="width: 100%; margin-bottom: 15px; background-color: #10b981;" onclick="startLocalGame()">Lokal spielen (Pass & Play)</button>
-            
-            <div class="mode-headline">Online Multiplayer (P2P)</div>
-            <button class="main-btn" style="width: 100%;" onclick="initAsHost()">Online: Spiel hosten</button>
-            <input type="text" id="join-id-input" class="setup-input" placeholder="Spiel-ID des Hosts eingeben">
-            <button class="main-btn" style="width: 100%; background-color: #3b82f6; color: white;" onclick="initAsClient()">Online: Spiel beitreten</button>
-        </div>
-        
-        <div id="lobby-wait" style="display: none; margin-top: 20px;">
-            <p>Deine Online Spiel-ID lautet:</p>
-            <h2 id="display-peer-id" style="color: var(--accent); letter-spacing: 2px; font-size: 2em; margin: 10px 0;">------</h2>
-            <p style="font-size: 0.9em; color: #94a3b8;">Gib diese ID deinem Mitspieler. Warte auf Beitritt...</p>
-        </div>
+        <h3 style="margin-top: 0;">Spieleinstellungen</h3>
+        <label for="player-count">Anzahl der Spieler:</label>
+        <select id="player-count" class="setup-select">
+            <option value="2">2 Spieler</option><option value="3">3 Spieler</option><option value="4" selected>4 Spieler</option>
+        </select>
+        <button class="main-btn" style="width: 100%;" onclick="startGame()">Spiel starten</button>
     </div>
-
     <div id="game-container">
         <div class="player-bar" id="dynamic-player-bar"></div>
         <div class="board">
@@ -133,192 +113,62 @@
         </div>
     </div>
     <div class="modal" id="payout-modal"><div class="modal-content"></div></div>
-
     <script>
         const WIN_CONDITION = 1000000;
         const cashValues = [10000, 10000, 20000, 20000, 20000, 30000, 30000, 30000, 40000, 40000, 40000, 50000, 50000, 50000, 60000, 70000, 80000, 90000, 100000];
-        
-        let totalPlayers = 4;
-        let isOnlineMode = false;
-        let isHost = false;
-        let myPlayerIndex = 0; // Lokal steuert man alle, online fest vergeben
-        
-        let deck = [], playerBanks = [], playerDice = [], activePlayer = 0, roundStarter = 0, currentRound = 1;
-        let peer = null, conn = null;
-
+        let totalPlayers = 4, deck = [], playerBanks = [], playerDice = [], activePlayer = 0, roundStarter = 0, currentRound = 1;
         let tiles = {
             1: { cards: [], dice: [], history: new Set() }, 2: { cards: [], dice: [], history: new Set() },
             3: { cards: [], dice: [], history: new Set() }, 4: { cards: [], dice: [], history: new Set() },
             5: { cards: [], dice: [], history: new Set() }, 6: { cards: [], dice: [], history: new Set() }
         };
-        
         const playerClasses = ['p1-txt', 'p2-txt', 'p3-txt', 'p4-txt'];
         const playerColors = ['var(--p1-color)', 'var(--p2-color)', 'var(--p3-color)', 'var(--p4-color)'];
         const playerNames = ['Spieler 1', 'Spieler 2', 'Spieler 3', 'Spieler 4'];
         const diceUnicode = { 1: '⚀', 2: '⚁', 3: '⚂', 4: '⚃', 5: '⚄', 6: '⚅' };
 
-        // PeerJS im Hintergrund vorbereiten, falls Online gewählt wird
-        document.addEventListener("DOMContentLoaded", () => {
-            const shortId = Math.floor(1000 + Math.random() * 9000).toString();
-            peer = new Peer("r2r-" + shortId);
-            peer.on('open', (id) => {
-                let idEl = document.getElementById('display-peer-id');
-                if(idEl) idEl.innerText = shortId;
-            });
-            peer.on('connection', (connection) => {
-                if (isOnlineMode && isHost) {
-                    conn = connection;
-                    setupConnectionListeners();
-                    startOnlineGame();
-                }
-            });
-        });
-
-        // MODUS 1: LOKALER START
-        function startLocalGame() {
-            isOnlineMode = false;
+        function startGame() {
             totalPlayers = parseInt(document.getElementById('player-count').value);
             document.documentElement.style.setProperty('--player-columns', totalPlayers);
-            
-            playerBanks = Array(totalPlayers).fill(0);
-            playerDice = Array(totalPlayers).fill(8);
-            
-            document.getElementById('setup-screen').style.display = 'none';
-            document.getElementById('game-container').style.display = 'flex';
-            
-            buildPlayerBarUI();
-            initDeck();
-            setupRoundCards();
-            executeRoll();
-        }
-
-        // MODUS 2: ONLINE-HOST START
-        function initAsHost() {
-            isOnlineMode = true;
-            isHost = true;
-            totalPlayers = 2; // Online fest auf Duell eingestellt
-            myPlayerIndex = 0;
-            document.documentElement.style.setProperty('--player-columns', 2);
-            document.getElementById('lobby-options').style.display = 'none';
-            document.getElementById('lobby-wait').style.display = 'block';
-            document.getElementById('status-line').innerText = "Warte auf Online-Mitspieler...";
-        }
-
-        // MODUS 3: ONLINE-CLIENT BEITRITT
-        function initAsClient() {
-            isOnlineMode = true;
-            isHost = false;
-            totalPlayers = 2;
-            myPlayerIndex = 1;
-            document.documentElement.style.setProperty('--player-columns', 2);
-            let targetId = document.getElementById('join-id-input').value.trim();
-            if(!targetId) { alert("Bitte eine gültige 4-stellige ID eintragen!"); return; }
-            
-            document.getElementById('status-line').innerText = "Verbindung zum Host wird aufgebaut...";
-            conn = peer.connect("r2r-" + targetId);
-            setupConnectionListeners();
-        }
-
-        function setupConnectionListeners() {
-            conn.on('open', () => {
-                document.getElementById('setup-screen').style.display = 'none';
-                document.getElementById('game-container').style.display = 'flex';
-                if (!isHost) {
-                    document.getElementById('status-line').innerText = "Verbunden! Warte auf Daten vom Host...";
-                }
-            });
-            conn.on('data', (data) => { handleNetworkData(data); });
-        }
-
-        function startOnlineGame() {
-            playerBanks = [0, 0];
-            playerDice = [8, 8];
-            buildPlayerBarUI();
-            initDeck();
-            setupRoundCards();
-            sendDataToPeer({
-                type: 'START_GAME',
-                tiles: sanitizeTilesForNetwork(tiles),
-                deck: deck
-            });
-            executeRoll();
-        }
-
-        function sendDataToPeer(data) {
-            if (isOnlineMode && conn && conn.open) { conn.send(data); }
-        }
-
-        function handleNetworkData(data) {
-            if (data.type === 'START_GAME') {
-                deck = data.deck;
-                reconstructTilesFromNetwork(data.tiles);
-                buildPlayerBarUI();
-                updateBoardUI();
-                executeRoll();
-            } else if (data.type === 'DICE_PLACED') {
-                showFallingDiceAnimation(data.face, data.count, data.activePlayerBefore);
-                tiles = reconstructTilesFromNetwork(data.tiles);
-                activePlayer = data.nextPlayer;
-                playerDice = data.playerDice;
-                setTimeout(() => {
-                    updateBoardUI();
-                    if (isRoundOver()) { if (isHost) evaluateRound(); } else { executeRoll(); }
-                }, 520);
-            } else if (data.type === 'ROUND_EVALUATED') {
-                playerBanks = data.playerBanks;
-                document.getElementById('payout-modal').querySelector('.modal-content').innerHTML = data.modalHtml;
-                document.getElementById('payout-modal').style.display = 'flex';
-            } else if (data.type === 'NEXT_ROUND_STARTED') {
-                currentRound = data.currentRound;
-                playerDice = data.playerDice;
-                activePlayer = data.activePlayer;
-                reconstructTilesFromNetwork(data.tiles);
-                document.getElementById('payout-modal').style.display = 'none';
-                updateBoardUI();
-                executeRoll();
-            }
-        }
-
-        function buildPlayerBarUI() {
+            playerBanks = Array(totalPlayers).fill(0); playerDice = Array(totalPlayers).fill(8);
             let playerBar = document.getElementById('dynamic-player-bar'); playerBar.innerHTML = '';
             for(let p = 0; p < totalPlayers; p++) {
-                let label = isOnlineMode ? (p === 0 ? "Spieler 1 (Host)" : "Spieler 2 (Gast)") : `Spieler ${p+1}`;
-                let tag = (isOnlineMode && p === myPlayerIndex) ? " (Du)" : "";
                 playerBar.innerHTML += `
                     <div class="player-status" id="p${p}-status">
-                        <div class="${playerClasses[p]}">${label}${tag}</div>
+                        <div class="${playerClasses[p]}">${playerNames[p]}</div>
                         <div class="dice-pool-graphic" id="p${p}-dice-graphic"></div>
                         <div id="p${p}-bank" style="font-size: 1.2em; font-weight: bold; margin-top: 5px;">0 $</div>
                     </div>
                 `;
             }
+            document.getElementById('setup-screen').style.display = 'none';
+            document.getElementById('game-container').style.display = 'flex';
+            initDeck(); setupRoundCards(); executeRoll();
         }
-
         function initDeck() { deck = [...cashValues, ...cashValues, ...cashValues]; shuffle(deck); }
         function shuffle(array) { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } }
         
         function setupRoundCards() {
-            if (deck.length < 20) initDeck();
+            if (deck.length < 25) initDeck();
             for(let i=1; i<=6; i++) {
                 tiles[i].cards = []; tiles[i].dice = Array(totalPlayers).fill(0); tiles[i].history = new Set();
                 let sum = 0;
-                do {
+                while (true) {
                     let card = deck.pop();
                     tiles[i].cards.push(card);
                     sum += card;
-                } while (sum < 50000);
+                    if (sum >= 50000) break;
+                }
                 tiles[i].cards.sort((a,b) => b-a);
             }
             updateBoardUI();
         }
-
         function renderDiceGraphics(playerIndex, count) {
             let container = document.getElementById(`p${playerIndex}-dice-graphic`); if(!container) return; container.innerHTML = '';
             for(let i = 0; i < 8; i++) {
                 let box = document.createElement('div'); box.className = i < count ? 'dice-icon active' : 'dice-icon spent'; container.appendChild(box);
             }
         }
-
         function updateBoardUI() {
             for(let i=1; i<=6; i++) {
                 document.getElementById(`cards-${i}`).innerHTML = tiles[i].cards.map(c => `<span class="cash-card-badge">$${c.toLocaleString()}</span>`).join('');
@@ -326,7 +176,7 @@
                 let placedDiv = document.getElementById(`placed-${i}`); placedDiv.innerHTML = '';
                 for(let p=0; p<totalPlayers; p++) {
                     if(tiles[i].dice[p] > 0) {
-                        placedDiv.innerHTML += `<div class="player-dice-row"><span class="${playerClasses[p]}">Spieler ${p+1}:</span><span>${tiles[i].dice[p]}x ${diceUnicode[i]}</span></div>`;
+                        placedDiv.innerHTML += `<div class="player-dice-row"><span class="${playerClasses[p]}">Spieler ${p+1}:</span><span>${tiles[i].dice[p]} ⚄</span></div>`;
                     }
                 }
             }
@@ -337,24 +187,14 @@
                 if(statusCard) { if(p === activePlayer && !isRoundOver()) { statusCard.classList.add('active'); } else { statusCard.classList.remove('active'); } }
             }
         }
-
         function executeRoll() {
-            for(let i=1; i<=6; i++) { document.getElementById(`action-zone-${i}`).innerHTML = ''; }
-            
-            // Wenn Online und nicht am Zug: Blockieren
-            if (isOnlineMode && activePlayer !== myPlayerIndex) {
-                let name = activePlayer === 0 ? "Spieler 1 (Host)" : "Spieler 2 (Gast)";
-                document.getElementById('status-line').innerHTML = `Runde ${currentRound} • <span class="${playerClasses[activePlayer]}">${name}</span> am Zug...`;
-                return;
-            }
-
             let diceCount = playerDice[activePlayer]; if(diceCount === 0) return;
+            for(let i=1; i<=6; i++) { document.getElementById(`action-zone-${i}`).innerHTML = ''; }
             let animationInterval = setInterval(() => {
                 let tempDiceHtml = '';
                 for(let i=0; i<diceCount; i++) { tempDiceHtml += `<span class="dice-spinning">${diceUnicode[Math.floor(Math.random() * 6) + 1]}</span>`; }
-                document.getElementById('status-line').innerHTML = `Runde ${currentRound} • ${isOnlineMode?'Du würfelst...':playerNames[activePlayer]+' würfelt...'} <div class="dice-roll-display">${tempDiceHtml}</div>`;
+                document.getElementById('status-line').innerHTML = `Runde ${currentRound} • Spieler ${activePlayer+1} würfelt... <div class="dice-roll-display">${tempDiceHtml}</div>`;
             }, 70);
-
             setTimeout(() => {
                 clearInterval(animationInterval);
                 let currentRoll = []; for(let i=0; i<diceCount; i++) { currentRoll.push(Math.floor(Math.random() * 6) + 1); }
@@ -362,78 +202,61 @@
                 let finalDiceHtml = currentRoll.map(val => `<span>${diceUnicode[val]}</span>`).join('');
                 let counts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0}; currentRoll.forEach(v => counts[v]++);
                 let maxCountInRoll = Math.max(...Object.values(counts));
-                
-                let titleText = isOnlineMode ? "Du hast gewürfelt" : `${playerNames[activePlayer]} hat gewürfelt`;
-                document.getElementById('status-line').innerHTML = `Runde ${currentRound} • ${titleText}: <div class="dice-roll-display" id="active-rolled-dice">${finalDiceHtml}</div>`;
-                
+                document.getElementById('status-line').innerHTML = `Runde ${currentRound} • Spieler ${activePlayer+1} hat gewürfelt: <div class="dice-roll-display" id="active-rolled-dice">${finalDiceHtml}</div>`;
                 for(let face=1; face<=6; face++) {
                     let zone = document.getElementById(`action-zone-${face}`);
                     if(counts[face] > 0) {
                         let count = counts[face], btn = document.createElement('button');
                         btn.className = (count === maxCountInRoll && maxCountInRoll > 0) ? 'select-tile-btn max-roll' : 'select-tile-btn';
-                        btn.innerText = `Hier +${count}x ablegen`; btn.onclick = () => selectDiceGroup(face, count); zone.appendChild(btn);
+                        btn.innerText = `Hier +${count}x ablegen`; btn.onclick = (e) => animateAndSelectDice(face, count, e.target); zone.appendChild(btn);
                     }
                 }
             }, 600);
         }
 
-        function showFallingDiceAnimation(face, count, playerIdx) {
+        function animateAndSelectDice(face, count, buttonEl) {
+            // Holen der Startkoordinaten aus der gewürfelten Anzeige oben
             let sourceEl = document.getElementById('active-rolled-dice');
             let destEl = document.getElementById(`tile-${face}`);
             if(sourceEl && destEl) {
                 let sRect = sourceEl.getBoundingClientRect();
                 let dRect = destEl.getBoundingClientRect();
+                
+                // Erzeugen des fliegenden Würfels
                 let flier = document.createElement('div');
                 flier.className = 'falling-dice-anim';
-                flier.style.color = playerColors[playerIdx];
+                flier.style.color = playerColors[activePlayer];
                 flier.innerText = diceUnicode[face];
                 flier.style.left = `${sRect.left + (sRect.width/2) - 15}px`;
                 flier.style.top = `${sRect.top}px`;
+                
+                // Berechnen der Flugdistanz
                 let dropX = (dRect.left + (dRect.width / 2)) - (sRect.left + (sRect.width / 2));
                 let dropY = (dRect.top + 40) - sRect.top;
                 flier.style.setProperty('--drop-x', `${dropX}px`);
                 flier.style.setProperty('--drop-y', `${dropY}px`);
+                
                 document.body.appendChild(flier);
+                
+                // Entfernen nach Animation und Logik triggern
                 setTimeout(() => { flier.remove(); }, 600);
             }
-        }
-
-        function selectDiceGroup(face, count) {
-            showFallingDiceAnimation(face, count, activePlayer);
             
-            tiles[face].dice[activePlayer] += count; 
-            tiles[face].history.add(activePlayer); 
-            playerDice[activePlayer] -= count;
-            
-            let activePlayerBefore = activePlayer;
-            
-            // Berechne nächsten Spieler
-            let nextPlayer = activePlayer;
-            if (!playerDice.every(d => d === 0)) {
-                let loops = 0; do { nextPlayer = (nextPlayer + 1) % totalPlayers; loops++; } while (playerDice[nextPlayer] === 0 && loops < (totalPlayers + 1));
-            }
-
+            // Sofortige Aktion ausblenden, damit kein Doppel-Klick möglich ist
             for(let i=1; i<=6; i++) { document.getElementById(`action-zone-${i}`).innerHTML = ''; }
-
-            if (isOnlineMode) {
-                sendDataToPeer({
-                    type: 'DICE_PLACED', face: face, count: count, activePlayerBefore: activePlayerBefore,
-                    nextPlayer: nextPlayer, playerDice: playerDice, tiles: sanitizeTilesForNetwork(tiles)
-                });
-            }
-
-            activePlayer = nextPlayer;
-
+            
+            // Logik nach kurzem Delay ausführen
             setTimeout(() => {
-                updateBoardUI();
-                if (isRoundOver()) {
-                    if (!isOnlineMode || isHost) evaluateRound();
-                } else {
-                    executeRoll();
-                }
-            }, 500);
+                tiles[face].dice[activePlayer] += count; tiles[face].history.add(activePlayer); playerDice[activePlayer] -= count;
+                determineNextPlayer();
+            }, 450);
         }
 
+        function determineNextPlayer() {
+            if (isRoundOver()) { evaluateRound(); return; }
+            let loops = 0; do { activePlayer = (activePlayer + 1) % totalPlayers; loops++; } while (playerDice[activePlayer] === 0 && loops < (totalPlayers + 1));
+            updateBoardUI(); executeRoll();
+        }
         function isRoundOver() { return playerDice.every(d => d === 0); }
         
         function evaluateRound() {
@@ -465,69 +288,22 @@
                     }
                 }
             }
-            
             let tableRowsHtml = "";
             for(let p=0; p<totalPlayers; p++) {
-                let nameLabel = isOnlineMode ? (p === 0 ? "Spieler 1 (Host)" : "Spieler 2 (Gast)") : `Spieler ${p+1}`;
                 let wins = playerWinsHtml[p] || '<span class="empty-dash">—</span>', clashes = '<span class="empty-dash">—</span>';
                 if(playerClashedTiles[p].length > 0) clashes = `<span class="clash-text-list">💥 Kachel ${playerClashedTiles[p].join(', ')}</span>`;
-                tableRowsHtml += `<tr><td><span class="${playerClasses[p]}" style="font-size: 1.1em;">${nameLabel}</span></td><td><div style="font-size:0.85em; color:#94a3b8;">$${oldBanks[p].toLocaleString()}</div><div style="font-weight:bold; color:#34d399; margin-top:2px;">➔ $${playerBanks[p].toLocaleString()}</div></td><td>${wins}</td><td>${clashes}</td></tr>`;
+                tableRowsHtml += `<tr><td><span class="${playerClasses[p]}" style="font-size: 1.1em;">${playerNames[p]}</span></td><td><div style="font-size:0.85em; color:#94a3b8;">$${oldBanks[p].toLocaleString()}</div><div style="font-weight:bold; color:#34d399; margin-top:2px;">➔ $${playerBanks[p].toLocaleString()}</div></td><td>${wins}</td><td>${clashes}</td></tr>`;
             }
-            
-            let buttonHtml = (!isOnlineMode || isHost) ? `<button class="main-btn" onclick="startNewRound()">Nächste Runde starten</button>` : `<p style="color: #94a3b8;">Warte darauf, dass der Host die nächste Runde startet...</p>`;
-            let modalHtml = `<h2 style="color:var(--accent); margin-top:0; margin-bottom:5px;">Runden-Auszahlung</h2><div style="color:#94a3b8; font-size:0.95em; margin-bottom:10px;">Was ist in Runde ${currentRound} passiert?</div><table class="payout-table"><thead><tr><th style="width:20%;">Spieler</th><th style="width:25%;">Konto (Alt ➔ Neu)</th><th style="width:35%;">Hier Gewonnen</th><th style="width:20%;">Hier Rausgeflogen</th></tr></thead><tbody>${tableRowsHtml}</tbody></table>${buttonHtml}`;
-            
-            document.getElementById('payout-modal').querySelector('.modal-content').innerHTML = modalHtml;
+            let modalContent = document.getElementById('payout-modal').querySelector('.modal-content');
+            modalContent.innerHTML = `<h2 style="color:var(--accent); margin-top:0; margin-bottom:5px;">Runden-Auszahlung</h2><div style="color:#94a3b8; font-size:0.95em; margin-bottom:10px;">Was ist in Runde ${currentRound} passiert?</div><table class="payout-table"><thead><tr><th style="width:20%;">Spieler</th><th style="width:25%;">Konto (Alt ➔ Neu)</th><th style="width:35%;">Hier Gewonnen</th><th style="width:20%;">Hier Rausgeflogen</th></tr></thead><tbody>${tableRowsHtml}</tbody></table><button class="main-btn" onclick="startNewRound()">Nächste Runde starten</button>`;
             document.getElementById('payout-modal').style.display = 'flex';
-
-            if (isOnlineMode && isHost) {
-                sendDataToPeer({ type: 'ROUND_EVALUATED', playerBanks: playerBanks, modalHtml: modalHtml });
-            }
         }
-
         function startNewRound() {
-            if(isOnlineMode && !isHost) return;
-            
-            let winners = []; 
-            for(let p=0; p<totalPlayers; p++) { 
-                let nameLabel = isOnlineMode ? (p === 0 ? "Spieler 1" : "Spieler 2") : `Spieler ${p+1}`;
-                if(playerBanks[p] >= WIN_CONDITION) winners.push(nameLabel); 
-            }
-            
-            if(winners.length > 0) { 
-                let endText = `🏆 SPIELENDE! Gewonnen haben: ${winners.join(' & ')}`;
-                document.getElementById('status-line').innerText = endText; 
-                document.getElementById('payout-modal').style.display = 'none';
-                updateBoardUI(); return; 
-            }
-            
-            currentRound++; 
-            playerDice = Array(totalPlayers).fill(8); 
-            roundStarter = (roundStarter + 1) % totalPlayers; activePlayer = roundStarter;
-            
-            setupRoundCards();
-            
-            if (isOnlineMode && isHost) {
-                sendDataToPeer({
-                    type: 'NEXT_ROUND_STARTED', currentRound: currentRound,
-                    playerDice: playerDice, activePlayer: activePlayer, tiles: sanitizeTilesForNetwork(tiles)
-                });
-            }
-
             document.getElementById('payout-modal').style.display = 'none';
-            updateBoardUI();
-            executeRoll();
-        }
-
-        function sanitizeTilesForNetwork(tilesObj) {
-            let clean = {};
-            for(let i=1; i<=6; i++) { clean[i] = { cards: tilesObj[i].cards, dice: tilesObj[i].dice, history: Array.from(tilesObj[i].history) }; }
-            return clean;
-        }
-
-        function reconstructTilesFromNetwork(networkTiles) {
-            for(let i=1; i<=6; i++) { tiles[i].cards = networkTiles[i].cards; tiles[i].dice = networkTiles[i].dice; tiles[i].history = new Set(networkTiles[i].history); }
-            return tiles;
+            let winners = []; for(let p=0; p<totalPlayers; p++) { if(playerBanks[p] >= WIN_CONDITION) winners.push(`Spieler ${p+1}`); }
+            if(winners.length > 0) { document.getElementById('status-line').innerText = `🏆 SPIELENDE! Gewonnen haben: ${winners.join(' & ')}`; updateBoardUI(); return; }
+            currentRound++; playerDice = Array(totalPlayers).fill(8); roundStarter = (roundStarter + 1) % totalPlayers; activePlayer = roundStarter;
+            setupRoundCards(); executeRoll();
         }
     </script>
 </body>

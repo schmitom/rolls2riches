@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rolls 2 Riches - Hybrid Edition</title>
+    <title>Rolls 2 Riches - Hybrid Edition (V11)</title>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
         :root {
@@ -141,7 +141,7 @@
         let totalPlayers = 4;
         let isOnlineMode = false;
         let isHost = false;
-        let myPlayerIndex = 0; // Lokal steuert man alle, online fest vergeben
+        let myPlayerIndex = 0;
         
         let deck = [], playerBanks = [], playerDice = [], activePlayer = 0, roundStarter = 0, currentRound = 1;
         let peer = null, conn = null;
@@ -157,10 +157,20 @@
         const playerNames = ['Spieler 1', 'Spieler 2', 'Spieler 3', 'Spieler 4'];
         const diceUnicode = { 1: '⚀', 2: '⚁', 3: '⚂', 4: '⚃', 5: '⚄', 6: '⚅' };
 
-        // PeerJS im Hintergrund vorbereiten, falls Online gewählt wird
+        // PeerJS mit Google STUN-Servern konfigurieren (durchbricht Mobilfunk- & Firewall-Sperren)
         document.addEventListener("DOMContentLoaded", () => {
             const shortId = Math.floor(1000 + Math.random() * 9000).toString();
-            peer = new Peer("r2r-" + shortId);
+            peer = new Peer("r2r-" + shortId, {
+                config: {
+                    'iceServers': [
+                        { url: 'stun:stun.l.google.com:19302' },
+                        { url: 'stun:stun1.l.google.com:19302' },
+                        { url: 'stun:stun2.l.google.com:19302' },
+                        { url: 'stun:stun3.l.google.com:19302' },
+                        { url: 'stun:stun4.l.google.com:19302' }
+                    ]
+                }
+            });
             peer.on('open', (id) => {
                 let idEl = document.getElementById('display-peer-id');
                 if(idEl) idEl.innerText = shortId;
@@ -196,7 +206,7 @@
         function initAsHost() {
             isOnlineMode = true;
             isHost = true;
-            totalPlayers = 2; // Online fest auf Duell eingestellt
+            totalPlayers = 2;
             myPlayerIndex = 0;
             document.documentElement.style.setProperty('--player-columns', 2);
             document.getElementById('lobby-options').style.display = 'none';
@@ -341,7 +351,6 @@
         function executeRoll() {
             for(let i=1; i<=6; i++) { document.getElementById(`action-zone-${i}`).innerHTML = ''; }
             
-            // Wenn Online und nicht am Zug: Blockieren
             if (isOnlineMode && activePlayer !== myPlayerIndex) {
                 let name = activePlayer === 0 ? "Spieler 1 (Host)" : "Spieler 2 (Gast)";
                 document.getElementById('status-line').innerHTML = `Runde ${currentRound} • <span class="${playerClasses[activePlayer]}">${name}</span> am Zug...`;
@@ -407,7 +416,6 @@
             
             let activePlayerBefore = activePlayer;
             
-            // Berechne nächsten Spieler
             let nextPlayer = activePlayer;
             if (!playerDice.every(d => d === 0)) {
                 let loops = 0; do { nextPlayer = (nextPlayer + 1) % totalPlayers; loops++; } while (playerDice[nextPlayer] === 0 && loops < (totalPlayers + 1));

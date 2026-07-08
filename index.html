@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rolls 2 Riches - Hybrid Edition (V14)</title>
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <title>Rolls 2 Riches - Hybrid Edition (V15)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
     <style>
         :root {
             --bg-color: #0f172a; --card-bg: #1e293b; --accent: #f59e0b;
@@ -157,25 +157,35 @@
         const playerNames = ['Spieler 1', 'Spieler 2', 'Spieler 3', 'Spieler 4'];
         const diceUnicode = { 1: '⚀', 2: '⚁', 3: '⚂', 4: '⚃', 5: '⚄', 6: '⚅' };
 
-        // Zurück auf die stabile Standard-Verbindung von PeerJS (Behebt die Blockade)
+        // Abgesicherte Initialisierung der Peer-Bibliothek
         document.addEventListener("DOMContentLoaded", () => {
-            const shortId = Math.floor(1000 + Math.random() * 9000).toString();
-            peer = new Peer("r2r-" + shortId);
-            
-            peer.on('open', (id) => {
-                let idEl = document.getElementById('display-peer-id');
-                if(idEl) idEl.innerText = shortId;
-            });
-            peer.on('connection', (connection) => {
-                if (isOnlineMode && isHost) {
-                    conn = connection;
-                    setupConnectionListeners();
-                    // 500ms künstliche Verzögerung, damit das Handy das Spielfeld fertig aufgebaut hat, bevor die Daten kommen
-                    setTimeout(() => {
-                        startOnlineGame();
-                    }, 500);
+            try {
+                if (typeof Peer === 'undefined') {
+                    document.getElementById('status-line').innerText = "Hinweis: Peer-Netzwerk offline. Lokaler Modus bereit.";
+                    return;
                 }
-            });
+                const shortId = Math.floor(1000 + Math.random() * 9000).toString();
+                peer = new Peer("r2r-" + shortId);
+                
+                peer.on('open', (id) => {
+                    let idEl = document.getElementById('display-peer-id');
+                    if(idEl) idEl.innerText = shortId;
+                });
+                
+                peer.on('connection', (connection) => {
+                    if (isOnlineMode && isHost) {
+                        conn = connection;
+                        setupConnectionListeners();
+                        setTimeout(() => { startOnlineGame(); }, 500);
+                    }
+                });
+
+                peer.on('error', (err) => {
+                    console.warn("PeerJS meldet einen Fehler:", err);
+                });
+            } catch (err) {
+                console.error("Netzwerk-Initialisierung fehlgeschlagen:", err);
+            }
         });
 
         // MODUS 1: LOKALER START
@@ -219,11 +229,16 @@
             if(!targetId) { alert("Bitte eine gültige 4-stellige ID eintragen!"); return; }
             
             document.getElementById('status-line').innerText = "Verbindung zum Host wird aufgebaut...";
-            conn = peer.connect("r2r-" + targetId);
-            setupConnectionListeners();
+            if(peer) {
+                conn = peer.connect("r2r-" + targetId);
+                setupConnectionListeners();
+            } else {
+                alert("Netzwerk-Bibliothek nicht bereit. Bitte Seite neu laden.");
+            }
         }
 
         function setupConnectionListeners() {
+            if(!conn) return;
             conn.on('open', () => {
                 document.getElementById('setup-screen').style.display = 'none';
                 document.getElementById('game-container').style.display = 'flex';
@@ -340,7 +355,7 @@
                 }
             }
             for(let p=0; p<totalPlayers; p++) {
-                if(document.getElementById(`p${p}-bank`)) document.getElementById(`p${p}-bank`).innerText = `$${playerBanks[p].toLocaleString()}`;
+                if(document.getElementById(`p${p}-bank`)) document.getElementById(`p` + p + `-bank`).innerText = `$${playerBanks[p].toLocaleString()}`;
                 renderDiceGraphics(p, playerDice[p]);
                 let statusCard = document.getElementById('p' + p + '-status');
                 if(statusCard) { if(p === activePlayer && !isRoundOver()) { statusCard.classList.add('active'); } else { statusCard.classList.remove('active'); } }
@@ -417,3 +432,125 @@
             
             let nextPlayer = activePlayer;
             if (!playerDice.every(d => d === 0)) {
+                let loops = 0; do { nextPlayer = (nextPlayer + 1) % totalPlayers; loops++; } while (playerDice[nextPlayer] === 0 && loops < (totalPlayers + 1));
+            }
+
+            for(let i=1; i<=6; i++) { document.getElementById(`action-zone-${i}`).innerHTML = ''; }
+
+            if (isOnlineMode) {
+                sendDataToPeer({
+                    type: 'DICE_PLACED', face: face, count: count, activePlayerBefore: activePlayerBefore,
+                    nextPlayer: nextPlayer, playerDice: playerDice, tiles: sanitizeTilesForNetwork(tiles)
+                });
+            }
+
+            activePlayer = nextPlayer;
+
+            setTimeout(() => {
+                updateBoardUI();
+                if (isRoundOver()) {
+                    if (!isOnlineMode || isHost) evaluateRound();
+                } else {
+                    executeRoll();
+                }
+            }, 500);
+        }
+
+        function isRoundOver() { return playerDice.every(d => d === 0); }
+        
+        function evaluateRound() {
+            let oldBanks = [...playerBanks], playerWinsHtml = Array(totalPlayers).fill(""), playerClashedTiles = Array.from({length: totalPlayers}, () => []);
+            for(let t=1; t<=6; t++) {
+                let tile = tiles[t], diceCounts = [];
+                for(let p=0; p<totalPlayers; p++) { if(tile.dice[p] > 0) diceCounts.push({ player: p, count: tile.dice[p] }); }
+                if(diceCounts.length === 0) continue;
+                if(tile.history.size === 1) {
+                    let winner = diceCounts[0].player, wonSum = tile.cards.reduce((a,b) => a+b, 0); if(tile.dice[winner] === 8) { wonSum += tile.cards[0]; }
+                    playerBanks[winner] += wonSum; playerWinsHtml[winner] += `<span class="badge-win">Kachel ${t} (+$${wonSum.toLocaleString()})</span> `;
+                } else {
+                    let countFrequencies = {}; diceCounts.forEach(dc => { countFrequencies[dc.count] = (countFrequencies[dc.count] || 0) + 1; });
+                    let remainingPlayers = diceCounts.filter(dc => countFrequencies[dc.count] === 1), eliminatedPlayers = diceCounts.filter(dc => countFrequencies[dc.count] > 1);
+                    eliminatedPlayers.forEach(ep => playerClashedTiles[ep.player].push(t));
+                    if(remainingPlayers.length > 0) {
+                        remainingPlayers.sort((a,b) => b.count - a.count);
+                        if(remainingPlayers.length === 1) {
+                            let winner = remainingPlayers[0].player, highestCard = tile.cards[0]; if(tile.dice[winner] === 8) highestCard *= 2;
+                            playerBanks[winner] += highestCard; playerWinsHtml[winner] += `<span class="badge-win">Kachel ${t} (+$${highestCard.toLocaleString()})</span> `;
+                        } else {
+                            for(let c=0; c < tile.cards.length; c++) {
+                                if(remainingPlayers[c]) {
+                                    let winner = remainingPlayers[c].player, cardValue = tile.cards[c]; playerBanks[winner] += cardValue;
+                                    playerWinsHtml[winner] += `<span class="badge-win">Kachel ${t} (Platz ${c+1}: +$${cardValue.toLocaleString()})</span> `;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            let tableRowsHtml = "";
+            for(let p=0; p<totalPlayers; p++) {
+                let nameLabel = isOnlineMode ? (p === 0 ? "Spieler 1 (Host)" : "Spieler 2 (Gast)") : `Spieler ${p+1}`;
+                let wins = playerWinsHtml[p] || '<span class="empty-dash">—</span>', clashes = '<span class="empty-dash">—</span>';
+                if(playerClashedTiles[p].length > 0) clashes = `<span class="clash-text-list">💥 Kachel ${playerClashedTiles[p].join(', ')}</span>`;
+                tableRowsHtml += `<tr><td><span class="${playerClasses[p]}" style="font-size: 1.1em;">${nameLabel}</span></td><td><div style="font-size:0.85em; color:#94a3b8;">$${oldBanks[p].toLocaleString()}</div><div style="font-weight:bold; color:#34d399; margin-top:2px;">➔ $${playerBanks[p].toLocaleString()}</div></td><td>${wins}</td><td>${clashes}</td></tr>`;
+            }
+            
+            let buttonHtml = (!isOnlineMode || isHost) ? `<button class="main-btn" onclick="startNewRound()">Nächste Runde starten</button>` : `<p style="color: #94a3b8;">Warte darauf, dass der Host die nächste Runde startet...</p>`;
+            let modalHtml = `<h2 style="color:var(--accent); margin-top:0; margin-bottom:5px;">Runden-Auszahlung</h2><div style="color:#94a3b8; font-size:0.95em; margin-bottom:10px;">Was ist in Runde ${currentRound} passiert?</div><table class="payout-table"><thead><tr><th style="width:20%;">Spieler</th><th style="width:25%;">Konto (Alt ➔ Neu)</th><th style="width:35%;">Hier Gewonnen</th><th style="width:20%;">Hier Rausgeflogen</th></tr></thead><tbody>${tableRowsHtml}</tbody></table>${buttonHtml}`;
+            
+            document.getElementById('payout-modal').querySelector('.modal-content').innerHTML = modalHtml;
+            document.getElementById('payout-modal').style.display = 'flex';
+
+            if (isOnlineMode && isHost) {
+                sendDataToPeer({ type: 'ROUND_EVALUATED', playerBanks: playerBanks, modalHtml: modalHtml });
+            }
+        }
+
+        function startNewRound() {
+            if(isOnlineMode && !isHost) return;
+            
+            let winners = []; 
+            for(let p=0; p<totalPlayers; p++) { 
+                let nameLabel = isOnlineMode ? (p === 0 ? "Spieler 1" : "Spieler 2") : `Spieler ${p+1}`;
+                if(playerBanks[p] >= WIN_CONDITION) winners.push(nameLabel); 
+            }
+            
+            if(winners.length > 0) { 
+                let endText = `🏆 SPIELENDE! Gewonnen haben: ${winners.join(' & ')}`;
+                document.getElementById('status-line').innerText = endText; 
+                document.getElementById('payout-modal').style.display = 'none';
+                updateBoardUI(); return; 
+            }
+            
+            currentRound++; 
+            playerDice = Array(totalPlayers).fill(8); 
+            roundStarter = (roundStarter + 1) % totalPlayers; activePlayer = roundStarter;
+            
+            setupRoundCards();
+            
+            if (isOnlineMode && isHost) {
+                sendDataToPeer({
+                    type: 'NEXT_ROUND_STARTED', currentRound: currentRound,
+                    playerDice: playerDice, activePlayer: activePlayer, tiles: sanitizeTilesForNetwork(tiles)
+                });
+            }
+
+            document.getElementById('payout-modal').style.display = 'none';
+            updateBoardUI();
+            executeRoll();
+        }
+
+        function sanitizeTilesForNetwork(tilesObj) {
+            let clean = {};
+            for(let i=1; i<=6; i++) { clean[i] = { cards: tilesObj[i].cards, dice: tilesObj[i].dice, history: Array.from(tilesObj[i].history) }; }
+            return clean;
+        }
+
+        function reconstructTilesFromNetwork(networkTiles) {
+            for(let i=1; i<=6; i++) { tiles[i].cards = networkTiles[i].cards; tiles[i].dice = networkTiles[i].dice; tiles[i].history = new Set(networkTiles[i].history); }
+            return tiles;
+        }
+    </script>
+</body>
+</html>

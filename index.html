@@ -145,6 +145,7 @@
         
         let deck = [], playerBanks = [], playerDice = [], activePlayer = 0, roundStarter = 0, currentRound = 1;
         let peer = null, conn = null;
+        let lastMessageAt = 0, heartbeatInterval = null, watchdogInterval = null;
 
         let tiles = {
             1: { cards: [], dice: [], history: new Set() }, 2: { cards: [], dice: [], history: new Set() },
@@ -274,18 +275,51 @@
                 if (!isHost) {
                     document.getElementById('status-line').innerText = "Verbunden! Warte auf Daten vom Host...";
                 }
+                lastMessageAt = Date.now();
+                startHeartbeat();
+                startWatchdog();
             });
-            conn.on('data', (data) => { handleNetworkData(data); });
+
+            conn.on('data', (data) => {
+                lastMessageAt = Date.now();
+                if (data && data.type === 'PING') return; // nur zum Verbindung-Warmhalten, kein Spielinhalt
+                handleNetworkData(data);
+            });
 
             conn.on('error', (err) => {
                 clearTimeout(connectTimeout);
+                stopHeartbeat();
                 console.error("Verbindungsfehler:", err);
                 document.getElementById('status-line').innerText = "Verbindungsfehler (" + (err.type || err.message || 'unbekannt') + "). Bitte Seite neu laden und erneut versuchen.";
             });
 
             conn.on('close', () => {
-                document.getElementById('status-line').innerText = "Verbindung zum Mitspieler wurde getrennt.";
+                stopHeartbeat();
+                document.getElementById('status-line').innerText = "Verbindung zum Mitspieler wurde getrennt. Bitte Seite neu laden.";
             });
+        }
+
+        function startHeartbeat() {
+            stopHeartbeat();
+            heartbeatInterval = setInterval(() => {
+                if (conn && conn.open) {
+                    try { conn.send({ type: 'PING' }); } catch(e) { console.warn("Heartbeat fehlgeschlagen:", e); }
+                }
+            }, 4000);
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+            if (watchdogInterval) { clearInterval(watchdogInterval); watchdogInterval = null; }
+        }
+
+        function startWatchdog() {
+            if (watchdogInterval) clearInterval(watchdogInterval);
+            watchdogInterval = setInterval(() => {
+                if (conn && conn.open && Date.now() - lastMessageAt > 12000) {
+                    document.getElementById('status-line').innerText = "Verbindung reagiert nicht mehr. Bitte Seite neu laden und erneut verbinden.";
+                }
+            }, 3000);
         }
 
         function startOnlineGame() {

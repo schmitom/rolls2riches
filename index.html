@@ -165,7 +165,16 @@
                     return;
                 }
                 const shortId = Math.floor(1000 + Math.random() * 9000).toString();
-                peer = new Peer("r2r-" + shortId);
+                peer = new Peer("r2r-" + shortId, {
+                    config: {
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                            { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                            { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+                        ]
+                    }
+                });
                 
                 peer.on('open', (id) => {
                     let idEl = document.getElementById('display-peer-id');
@@ -182,6 +191,18 @@
 
                 peer.on('error', (err) => {
                     console.warn("PeerJS meldet einen Fehler:", err);
+                    if (err.type === 'unavailable-id') {
+                        document.getElementById('status-line').innerText = "ID war bereits vergeben. Bitte Seite neu laden und erneut versuchen.";
+                    } else if (isOnlineMode) {
+                        document.getElementById('status-line').innerText = "Netzwerkfehler (" + err.type + "). Bitte Seite neu laden und erneut versuchen.";
+                    }
+                });
+
+                peer.on('disconnected', () => {
+                    if (isOnlineMode) {
+                        console.warn("Peer vom Signalisierungs-Server getrennt, versuche Reconnect...");
+                        peer.reconnect();
+                    }
                 });
             } catch (err) {
                 console.error("Netzwerk-Initialisierung fehlgeschlagen:", err);
@@ -239,7 +260,15 @@
 
         function setupConnectionListeners() {
             if(!conn) return;
+
+            let connectTimeout = setTimeout(() => {
+                if (!conn.open) {
+                    document.getElementById('status-line').innerText = "Verbindung kam nicht zustande (Timeout). Bitte ID prüfen, Seite neu laden und erneut versuchen.";
+                }
+            }, 15000);
+
             conn.on('open', () => {
+                clearTimeout(connectTimeout);
                 document.getElementById('setup-screen').style.display = 'none';
                 document.getElementById('game-container').style.display = 'flex';
                 if (!isHost) {
@@ -247,6 +276,16 @@
                 }
             });
             conn.on('data', (data) => { handleNetworkData(data); });
+
+            conn.on('error', (err) => {
+                clearTimeout(connectTimeout);
+                console.error("Verbindungsfehler:", err);
+                document.getElementById('status-line').innerText = "Verbindungsfehler (" + (err.type || err.message || 'unbekannt') + "). Bitte Seite neu laden und erneut versuchen.";
+            });
+
+            conn.on('close', () => {
+                document.getElementById('status-line').innerText = "Verbindung zum Mitspieler wurde getrennt.";
+            });
         }
 
         function startOnlineGame() {

@@ -335,7 +335,9 @@
             sendDataToPeer({
                 type: 'START_GAME',
                 tiles: sanitizeTilesForNetwork(tiles),
-                deck: deck
+                deck: deck,
+                playerBanks: playerBanks,
+                playerDice: playerDice
             });
             
             executeRoll();
@@ -348,6 +350,8 @@
         function handleNetworkData(data) {
             if (data.type === 'START_GAME') {
                 deck = data.deck;
+                playerBanks = data.playerBanks;
+                playerDice = data.playerDice;
                 reconstructTilesFromNetwork(data.tiles);
                 buildPlayerBarUI();
                 updateBoardUI();
@@ -428,8 +432,9 @@
                 }
             }
             for(let p=0; p<totalPlayers; p++) {
-                if(document.getElementById(`p${p}-bank`)) document.getElementById(`p` + p + `-bank`).innerText = `$${playerBanks[p].toLocaleString()}`;
-                renderDiceGraphics(p, playerDice[p]);
+                let bank = playerBanks[p] ?? 0;
+                if(document.getElementById(`p${p}-bank`)) document.getElementById(`p` + p + `-bank`).innerText = `$${bank.toLocaleString()}`;
+                renderDiceGraphics(p, playerDice[p] ?? 0);
                 let statusCard = document.getElementById('p' + p + '-status');
                 if(statusCard) { if(p === activePlayer && !isRoundOver()) { statusCard.classList.add('active'); } else { statusCard.classList.remove('active'); } }
             }

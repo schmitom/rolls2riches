@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rolls 2 Riches - Build 2026-07-09-v6</title>
+    <title>Rolls 2 Riches - Build 2026-07-10-v7</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
     <style>
         :root {
@@ -87,7 +87,7 @@
     </style>
 </head>
 <body>
-    <h1>Rolls 2 Riches <span style="font-size: 0.3em; color: #94a3b8; vertical-align: middle; font-weight: normal;">Build 2026-07-09-v6</span></h1>
+    <h1>Rolls 2 Riches <span style="font-size: 0.3em; color: #94a3b8; vertical-align: middle; font-weight: normal;">Build 2026-07-10-v7</span></h1>
     <div class="status-header-text" id="status-line">Wähle einen Spielmodus...</div>
     
     <div id="setup-screen">
@@ -440,7 +440,6 @@
                     tiles[i].cards.push(card);
                     sum += card;
                 } while (sum < 50000);
-                tiles[i].cards.sort((a,b) => b-a);
             }
             updateBoardUI();
         }
@@ -580,8 +579,9 @@
                 let tile = tiles[t], diceCounts = [];
                 for(let p=0; p<totalPlayers; p++) { if(tile.dice[p] > 0) diceCounts.push({ player: p, count: tile.dice[p] }); }
                 if(diceCounts.length === 0) continue;
+                let sortedCards = [...tile.cards].sort((a,b) => b-a); // nur für die Auszahlungs-Rangfolge, Anzeige bleibt in Zugreihenfolge
                 if(tile.history.size === 1) {
-                    let winner = diceCounts[0].player, wonSum = tile.cards.reduce((a,b) => a+b, 0); if(tile.dice[winner] === 8) { wonSum += tile.cards[0]; }
+                    let winner = diceCounts[0].player, wonSum = tile.cards.reduce((a,b) => a+b, 0); if(tile.dice[winner] === 8) { wonSum += sortedCards[0]; }
                     playerBanks[winner] += wonSum; playerWinsHtml[winner] += `<span class="badge-win">Kachel ${t} (+$${wonSum.toLocaleString()})</span> `;
                 } else {
                     let countFrequencies = {}; diceCounts.forEach(dc => { countFrequencies[dc.count] = (countFrequencies[dc.count] || 0) + 1; });
@@ -590,12 +590,14 @@
                     if(remainingPlayers.length > 0) {
                         remainingPlayers.sort((a,b) => b.count - a.count);
                         if(remainingPlayers.length === 1) {
-                            let winner = remainingPlayers[0].player, highestCard = tile.cards[0]; if(tile.dice[winner] === 8) highestCard *= 2;
+                            let winner = remainingPlayers[0].player, highestCard = sortedCards[0]; if(tile.dice[winner] === 8) highestCard *= 2;
                             playerBanks[winner] += highestCard; playerWinsHtml[winner] += `<span class="badge-win">Kachel ${t} (+$${highestCard.toLocaleString()})</span> `;
                         } else {
-                            for(let c=0; c < tile.cards.length; c++) {
+                            for(let c=0; c < sortedCards.length; c++) {
                                 if(remainingPlayers[c]) {
-                                    let winner = remainingPlayers[c].player, cardValue = tile.cards[c]; playerBanks[winner] += cardValue;
+                                    let winner = remainingPlayers[c].player, cardValue = sortedCards[c];
+                                    if(c === 0 && tile.dice[winner] === 8) cardValue *= 2; // 8-Würfel-Bonus gilt immer für den Rang-1-Gewinner
+                                    playerBanks[winner] += cardValue;
                                     playerWinsHtml[winner] += `<span class="badge-win">Kachel ${t} (Platz ${c+1}: +$${cardValue.toLocaleString()})</span> `;
                                 }
                             }
